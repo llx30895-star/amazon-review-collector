@@ -1,47 +1,51 @@
 @echo off
 chcp 65001 >nul
-title Amazon 评论采集器 - 公网访问
+title Amazon Collector - Public Access
 
 echo.
 echo ==============================================
-echo    Amazon 评论采集器 - 公网访问
+echo    Amazon Collector - Public Access Launcher
 echo ==============================================
 echo.
 
-:: 检查本地服务
+:: Check local service
 netstat -ano | findstr ":18888 " | findstr LISTENING >nul
 if %errorlevel% neq 0 (
-    echo [ERROR] 本地服务未启动！
-    echo 请先运行: node server.js
+    echo [ERROR] Local service not running!
+    echo Please run in another window: node server.js
     pause
     exit /b 1
 )
-echo [OK] 本地服务已就绪 (localhost:18888)
+echo [OK] Local service is running (localhost:18888)
 echo.
 
-:: 优先用 cloudflared（若存在且完整），否则用 SSH 隧道
-set TUNNEL_CMD=
-
+:: Detect tunnel method
+set USE_CF=0
 if exist "C:\cloudflared\cloudflared.exe" (
-    echo [INFO] 使用 Cloudflare Tunnel 方案...
-    set TUNNEL_CMD=C:\cloudflared\cloudflared.exe tunnel --url http://localhost:18888
-) else (
-    echo [INFO] 使用 SSH Tunnel 方案（无需安装）...
-    echo 注意：如果是第一次用 SSH 隧道，会提示输入密码，直接回车即可
+    :: Check if file size looks valid (should be ~60MB = 60000000 bytes)
+    for %%A in ("C:\cloudflared\cloudflared.exe") do set CFSIZE=%%~zA
+)
+if defined CFSIZE (
+    if %CFSIZE% GEQ 30000000 (
+        set USE_CF=1
+    )
+)
+
+if "%USE_CF%"=="1" (
+    echo [Method] Cloudflare Tunnel
     echo.
-    set TUNNEL_CMD=ssh -o StrictHostKeyChecking=no -R 80:localhost:18888 nokey@localhost.run
+    echo Waiting for tunnel URL...
+    echo ==============================================
+    C:\cloudflared\cloudflared.exe tunnel --url http://localhost:18888
+) else (
+    echo [Method] SSH Tunnel (no download needed)
+    echo.
+    echo If first time: press Enter when asked for password
+    echo Wait 5-10 seconds for the public URL to appear
+    echo ==============================================
+    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 80:localhost:18888 nokey@localhost.run
 )
 
 echo.
-echo ==============================================
-echo   隧道启动中，请等待 5-10 秒...
-echo   看到类似 https://xxxxx.localhost.run 的链接即成功
-echo   按 Ctrl+C 停止
-echo ==============================================
-echo.
-
-%TUNNEL_CMD%
-
-echo.
-echo 按任意键退出...
+echo Tunnel exited. Press any key to close...
 pause >nul
