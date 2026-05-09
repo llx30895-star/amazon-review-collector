@@ -25,6 +25,7 @@ async function getChromium() {
 const CDP_ENDPOINT = 'http://127.0.0.1:18800';
 const CLIPPINGS_DIR = 'D:\\software\\obsidian\\agent\\Clippings';
 const PORT = 18888;
+const HOST = '0.0.0.0'; // 接受所有网络接口
 const STATIC_DIR = __dirname;
 
 const STAR_MAP = {
@@ -301,13 +302,26 @@ const server = http.createServer(async (req, res) => {
 
         await browser.close();
 
-        // If single result and format=download, return the file directly
-        if (results.length === 1 && results[0].success && format === 'download') {
-          const r = results[0];
-          return sendFile(res, r.md, r.filename);
-        }
-
+        // Always return JSON so the page stays (never replace the page with file download)
         return sendJson(res, 200, { results });
+      } catch (e) {
+        return sendJson(res, 500, { error: e.message });
+      }
+    });
+    return;
+  }
+
+  // API: download file
+  if (pathname === '/api/download' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { md, filename } = JSON.parse(body);
+        if (!md || !filename) {
+          return sendJson(res, 400, { error: 'Missing md or filename' });
+        }
+        return sendFile(res, md, filename);
       } catch (e) {
         return sendJson(res, 500, { error: e.message });
       }
@@ -332,9 +346,10 @@ const server = http.createServer(async (req, res) => {
   res.end('Not found');
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`Amazon Review Collector Web UI`);
-  console.log(`Open: http://localhost:${PORT}`);
+  console.log(`Local: http://localhost:${PORT}`);
+  console.log(`Network: http://0.0.0.0:${PORT}`);
   console.log(`CDP: ${CDP_ENDPOINT}`);
   console.log(`Output: ${CLIPPINGS_DIR}`);
 });

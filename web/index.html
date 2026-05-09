@@ -748,10 +748,10 @@
     const starLabels = { '1':'1星','2':'2星','3':'3星','4':'4星','5':'5星' };
 
     try {
-      const response = await fetch('/api/collect', {
+      const response = await fetch(`${API_BASE}/api/collect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls, star: selectedStar, format: urls.length === 1 ? 'json' : 'json' }),
+        body: JSON.stringify({ urls, star: selectedStar, format: 'json' }),
       });
 
       const data = await response.json();
@@ -777,7 +777,7 @@
         progressBar.style.width = `${((i+1)/urls.length*100)}%`;
 
         try {
-          const response = await fetch('/api/collect', {
+          const response = await fetch(`${API_BASE}/api/collect`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ urls: [url], star: selectedStar }),
@@ -900,6 +900,9 @@
     };
     document.head.appendChild(script);
   })();
+
+  // Auto-detect API base URL from current location (supports any public URL / localhost)
+  const API_BASE = window.location.origin;
 </script>
 
 </body>
