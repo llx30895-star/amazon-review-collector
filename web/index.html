@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon 评论采集器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #FF9900;
+    --accent2: #FFB340;
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --success: #3ecf8e;
+    --error: #f45b5b;
+    --radius: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  .header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .header h1 span {
+    color: var(--accent);
+  }
+
+  .header p {
+    color: var(--text2);
+    font-size: 14px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 16px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 9px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .tab.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+
+  .tab:hover:not(.active) {
+    background: rgba(255,153,0,0.12);
+    color: var(--text);
+  }
+
+  .input-group {
+    margin-bottom: 20px;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  textarea, input[type="file"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+
+  textarea {
+    padding: 14px;
+    height: 120px;
+    border: 2px solid var(--border);
+    line-height: 1.6;
+  }
+
+  textarea:focus, input[type="file"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  textarea::placeholder {
+    color: var(--text2);
+    opacity: 0.7;
+  }
+
+  .file-input-wrapper {
+    position: relative;
+  }
+
+  .file-input-wrapper input[type="file"] {
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+
+  .file-hint {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 6px;
+  }
+
+  .star-selector {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .star-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 10px 8px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .star-btn .star-icon {
+    font-size: 18px;
+  }
+
+  .star-btn:hover:not(.active) {
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  .star-btn.active {
+    border-color: var(--accent);
+    background: rgba(255,153,0,0.15);
+    color: var(--accent);
+  }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 13px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent2);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  .progress-area {
+    display: none;
+  }
+
+  .progress-area.show {
+    display: block;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .progress-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .progress-status {
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 6px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  .log-area {
+    background: #0c0e14;
+    border-radius: 8px;
+    padding: 14px;
+    max-height: 280px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  .log-line {
+    color: var(--text2);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .log-line.ok { color: var(--success); }
+  .log-line.err { color: var(--error); }
+  .log-line.info { color: var(--accent); }
+
+  .result-area {
+    display: none;
+  }
+
+  .result-area.show {
+    display: block;
+  }
+
+  .result-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+  }
+
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .result-asin {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .result-badge {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  .result-badge.ok {
+    background: rgba(62,207,142,0.15);
+    color: var(--success);
+  }
+
+  .result-badge.err {
+    background: rgba(244,91,91,0.15);
+    color: var(--error);
+  }
+
+  .result-meta {
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 12px;
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .result-btn {
+    flex: 1;
+    padding: 9px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .result-btn.download {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .result-btn.download:hover {
+    background: var(--accent2);
+  }
+
+  .result-btn.obsidian {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .result-btn.obsidian:hover {
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0,0,0,0.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .hidden { display: none !important; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Alert box */
+  .alert {
+    background: rgba(244,91,91,0.1);
+    border: 1px solid rgba(244,91,91,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--error);
+    margin-bottom: 16px;
+    display: none;
+  }
+  .alert.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1><span>📦</span> Amazon 评论采集器</h1>
+    <p>采集 Amazon 商品评论，保存为 Markdown 文件</p>
+  </div>
+
+  <!-- Mode Tabs -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-tab="single">单条链接</button>
+      <button class="tab" data-tab="multi">多条链接</button>
+      <button class="tab" data-tab="excel">Excel 文件</button>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <!-- Single URL -->
+    <div id="tab-single" class="tab-panel">
+      <div class="input-group">
+        <label>Amazon 商品链接</label>
+        <textarea id="inputSingle" placeholder="https://www.amazon.com/dp/B0B63KGXT5&#10;或 https://www.amazon.com/gp/product/B0B63KGXT5"></textarea>
+      </div>
+    </div>
+
+    <!-- Multi URL -->
+    <div id="tab-multi" class="tab-panel hidden">
+      <div class="input-group">
+        <label>多条链接（每行一个，或用逗号分隔）</label>
+        <textarea id="inputMulti" placeholder="https://www.amazon.com/dp/B0B63KGXT5&#10;https://www.amazon.com/dp/B0ABC123XY&#10;..."></textarea>
+      </div>
+    </div>
+
+    <!-- Excel -->
+    <div id="tab-excel" class="tab-panel hidden">
+      <div class="input-group">
+        <label>选择 Excel 文件</label>
+        <div class="file-input-wrapper">
+          <input type="file" id="inputExcel" accept=".xlsx,.xls,.csv">
+        </div>
+        <p class="file-hint">支持 .xlsx / .xls / .csv，文件中需包含 amazon.com 链接</p>
+      </div>
+    </div>
+
+    <!-- Star Selector -->
+    <div class="input-group">
+      <label>评论星级</label>
+      <div class="star-selector">
+        <button class="star-btn active" data-star="1">
+          <span class="star-icon">⭐</span>
+          1 星
+        </button>
+        <button class="star-btn" data-star="2">
+          <span class="star-icon">⭐⭐</span>
+          2 星
+        </button>
+        <button class="star-btn" data-star="3">
+          <span class="star-icon">⭐⭐⭐</span>
+          3 星
+        </button>
+        <button class="star-btn" data-star="4">
+          <span class="star-icon">⭐⭐⭐⭐</span>
+          4 星
+        </button>
+        <button class="star-btn" data-star="5">
+          <span class="star-icon">⭐⭐⭐⭐⭐</span>
+          5 星
+        </button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnStart">
+        <span>🚀</span> 开始采集
+      </button>
+      <button class="btn btn-secondary" id="btnReset">
+        重置
+      </button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="card progress-area" id="progressArea">
+    <div class="progress-header">
+      <span class="progress-title">采集中...</span>
+      <span class="progress-status" id="progressStatus">准备中</span>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="log-area" id="logArea"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="card result-area" id="resultArea">
+    <div class="card-title">采集结果</div>
+    <div id="resultList"></div>
+    <div class="actions" id="resultActions" style="margin-top:16px; display:none;">
+      <button class="btn btn-primary" id="btnDownloadAll">下载所有文件</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // State
+  let currentTab = 'single';
+  let selectedStar = '1';
+  let results = [];
+  let isRunning = false;
+
+  // DOM refs
+  const $ = (s) => document.querySelector(s);
+  const tabs = document.querySelectorAll('.tab');
+  const tabPanels = {
+    single: $('#tab-single'),
+    multi: $('#tab-multi'),
+    excel: $('#tab-excel'),
+  };
+  const starBtns = document.querySelectorAll('.star-btn');
+  const btnStart = $('#btnStart');
+  const btnReset = $('#btnReset');
+  const progressArea = $('#progressArea');
+  const progressBar = $('#progressBar');
+  const progressStatus = $('#progressStatus');
+  const logArea = $('#logArea');
+  const resultArea = $('#resultArea');
+  const resultList = $('#resultList');
+  const alertBox = $('#alertBox');
+  const btnDownloadAll = $('#btnDownloadAll');
+
+  // Tab switching
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (isRunning) return;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      Object.entries(tabPanels).forEach(([k, v]) => {
+        v.classList.toggle('hidden', k !== currentTab);
+      });
+    });
+  });
+
+  // Star selection
+  starBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (isRunning) return;
+      starBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedStar = btn.dataset.star;
+    });
+  });
+
+  // Log
+  function log(msg, type = '') {
+    const line = document.createElement('div');
+    line.className = 'log-line' + (type ? ' ' + type : '');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logArea.appendChild(line);
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+
+  function showAlert(msg) {
+    alertBox.textContent = msg;
+    alertBox.classList.add('show');
+  }
+
+  function hideAlert() {
+    alertBox.classList.remove('show');
+  }
+
+  // Parse URLs from input
+  function parseUrls() {
+    let urls = [];
+
+    if (currentTab === 'single') {
+      const val = $('#inputSingle').value.trim();
+      if (!val) { showAlert('请输入商品链接'); return []; }
+      urls = val.split(/[\n,]/).map(u => u.trim()).filter(u => u.length > 0);
+    } else if (currentTab === 'multi') {
+      const val = $('#inputMulti').value.trim();
+      if (!val) { showAlert('请输入链接'); return []; }
+      urls = val.split(/[\n,]/).map(u => u.trim()).filter(u => u.length > 0);
+    } else if (currentTab === 'excel') {
+      // handled below
+    }
+
+    return urls;
+  }
+
+  // Build FormData for Excel
+  function buildFormData() {
+    if (currentTab === 'excel') {
+      const fileInput = $('#inputExcel');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        showAlert('请选择 Excel 文件');
+        return null;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('star', selectedStar);
+      return formData;
+    }
+    return null;
+  }
+
+  // Start collection
+  async function startCollect() {
+    if (isRunning) return;
+    hideAlert();
+    results = [];
+
+    // Reset UI
+    progressArea.classList.add('show');
+    resultArea.classList.remove('show');
+    resultList.innerHTML = '';
+    $('#resultActions').style.display = 'none';
+    logArea.innerHTML = '';
+    progressBar.style.width = '0%';
+    btnStart.disabled = true;
+    isRunning = true;
+
+    const starLabels = { '1':'1星','2':'2星','3':'3星','4':'4星','5':'5星' };
+
+    // Handle Excel upload first
+    if (currentTab === 'excel') {
+      const fileInput = $('#inputExcel');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        showAlert('请选择 Excel 文件');
+        progressArea.classList.remove('show');
+        btnStart.disabled = false;
+        isRunning = false;
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('excel', fileInput.files[0]);
+      formData.append('star', selectedStar);
+
+      log(`上传 Excel 文件: ${fileInput.files[0].name}`, 'info');
+      progressStatus.textContent = '解析 Excel...';
+
+      try {
+        // Read Excel client-side using SheetJS
+        const arrayBuffer = await fileInput.files[0].arrayBuffer();
+
+        // Use a simple approach: send to server and let server handle it
+        // But since we need SheetJS, let's parse client-side
+        const XLSX = window.XLSX;
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        const foundUrls = [];
+        for (const row of json) {
+          if (!row) continue;
+          for (const cell of row) {
+            if (typeof cell === 'string' && cell.includes('amazon.com')) {
+              const m = cell.match(/\/dp\/([A-Z0-9]{10})/);
+              if (m) foundUrls.push(`https://www.amazon.com/dp/${m[1]}`);
+              else if (cell.includes('amazon.com')) foundUrls.push(cell);
+            }
+          }
+        }
+
+        if (foundUrls.length === 0) {
+          showAlert('Excel 中未找到任何 Amazon 链接');
+          progressArea.classList.remove('show');
+          btnStart.disabled = false;
+          isRunning = false;
+          return;
+        }
+
+        log(`从 Excel 解析出 ${foundUrls.length} 个链接`, 'info');
+        // Continue with these URLs
+        await runCollection(foundUrls);
+
+      } catch (e) {
+        log(`Excel 解析失败: ${e.message}`, 'err');
+        btnStart.disabled = false;
+        isRunning = false;
+        return;
+      }
+
+      return;
+    }
+
+    // Normal URL-based collection
+    const urls = parseUrls();
+    if (urls.length === 0) {
+      progressArea.classList.remove('show');
+      btnStart.disabled = false;
+      isRunning = false;
+      return;
+    }
+
+    log(`准备采集 ${urls.length} 个商品，星级：${starLabels[selectedStar]}`, 'info');
+    await runCollection(urls);
+  }
+
+  async function runCollection(urls) {
+    const starLabels = { '1':'1星','2':'2星','3':'3星','4':'4星','5':'5星' };
+
+    try {
+      const response = await fetch('/api/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls, star: selectedStar, format: urls.length === 1 ? 'json' : 'json' }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        log(`服务器错误: ${data.error || response.statusText}`, 'err');
+        btnStart.disabled = false;
+        isRunning = false;
+        return;
+      }
+
+      results = data.results || [];
+      updateResults(results);
+
+    } catch (e) {
+      log(`请求失败: ${e.message}`, 'err');
+      // Try individual collection
+      results = [];
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        log(`[${i+1}/${urls.length}] 采集: ${url}`);
+        progressStatus.textContent = `[${i+1}/${urls.length}] ${url}`;
+        progressBar.style.width = `${((i+1)/urls.length*100)}%`;
+
+        try {
+          const response = await fetch('/api/collect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls: [url], star: selectedStar }),
+          });
+          const data = await response.json();
+          if (data.results && data.results[0]) {
+            results.push(data.results[0]);
+          }
+        } catch (err) {
+          results.push({ asin: url, success: false, reason: err.message });
+        }
+      }
+
+      updateResults(results);
+    }
+
+    btnStart.disabled = false;
+    isRunning = false;
+    log('采集完成', 'ok');
+  }
+
+  function updateResults(results) {
+    progressArea.classList.remove('show');
+    resultArea.classList.add('show');
+    resultList.innerHTML = '';
+
+    const starLabels = { '1':'1星','2':'2星','3':'3星','4':'4星','5':'5星' };
+
+    results.forEach((r, i) => {
+      if (!r.success) {
+        log(`${r.asin}: 失败 (${r.reason})`, 'err');
+      } else {
+        log(`${r.asin}: ${r.reviewsCount} 条${r.targetCount ? ` (目标${r.targetCount}条)` : ''} → ${r.filename}`, 'ok');
+      }
+
+      const card = document.createElement('div');
+      card.className = 'result-card';
+
+      const badge = r.success
+        ? `<span class="result-badge ok">✓ 成功</span>`
+        : `<span class="result-badge err">✗ 失败</span>`;
+
+      const meta = r.success
+        ? `${starLabels[r.starLabel] || selectedStar+'星'} · ${r.reviewsCount} 条评论`
+        : `原因: ${r.reason}`;
+
+      const actions = r.success
+        ? `<button class="result-btn download" onclick="downloadFile(${i})">📥 下载 .md</button>
+           <button class="result-btn obsidian" onclick="openInObsidian('${r.filepath.replace(/\\/g,'\\\\')}')">📁 打开目录</button>`
+        : '';
+
+      card.innerHTML = `
+        <div class="result-header">
+          <span class="result-asin">${r.asin}</span>
+          ${badge}
+        </div>
+        <div class="result-meta">${meta}</div>
+        <div class="result-actions">${actions}</div>
+      `;
+
+      resultList.appendChild(card);
+    });
+
+    if (results.filter(r => r.success).length > 1) {
+      $('#resultActions').style.display = 'flex';
+    }
+
+    // Auto-scroll to results
+    resultArea.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Download single file
+  function downloadFile(idx) {
+    const r = results[idx];
+    if (!r || !r.md) return;
+    const blob = new Blob([r.md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = r.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Open Obsidian clippings dir in Windows Explorer
+  function openInObsidian(filepath) {
+    const folder = 'D:\\software\\obsidian\\agent\\Clippings';
+    window.open(`file:///${folder.replace(/\\/g, '/')}`, '_blank');
+  }
+
+  // Download all
+  $('#btnDownloadAll').addEventListener('click', () => {
+    results.filter(r => r.success).forEach((r, i) => {
+      setTimeout(() => downloadFile(results.indexOf(r)), i * 300);
+    });
+  });
+
+  // Reset
+  btnReset.addEventListener('click', () => {
+    if (isRunning) return;
+    $('#inputSingle').value = '';
+    $('#inputMulti').value = '';
+    $('#inputExcel').value = '';
+    progressArea.classList.remove('show');
+    resultArea.classList.remove('show');
+    logArea.innerHTML = '';
+    hideAlert();
+    results = [];
+  });
+
+  btnStart.addEventListener('click', startCollect);
+
+  // Load SheetJS for Excel parsing
+  (function() {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+    script.onerror = () => {
+      // Fallback: let server handle Excel parsing
+      console.log('SheetJS not loaded, Excel parsing will be done server-side');
+    };
+    document.head.appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
