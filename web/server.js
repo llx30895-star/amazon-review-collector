@@ -24,8 +24,8 @@ async function getChromium() {
 
 // Auto-start Chrome if not running, then connect via CDP
 let _browser = null;
-let _context = null;
-let _page = null;
+
+const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
 async function ensureBrowser() {
   const Chromium = await getChromium();
@@ -35,25 +35,29 @@ async function ensureBrowser() {
     const browser = await Chromium.connectOverCDP(CDP_ENDPOINT);
     const ctx = browser.contexts()[0] || await browser.newContext();
     const page = ctx.pages()[0] || await ctx.newPage();
+    console.log('[Chrome] Connected to existing Chrome @18800');
     return { browser, context: ctx, page };
   } catch {
     // No Chrome at 18800 — launch our own Chrome (visible, with debugging port)
-    console.log('[Chrome] No existing Chrome @18800, launching new one...');
+    console.log('[Chrome] No Chrome @18800, launching new one...');
     try {
       const browser = await Chromium.launch({
         headless: false,
+        executablePath: CHROME_PATH,
         args: [
           '--remote-debugging-port=18800',
           '--no-first-run',
           '--no-default-browser-check',
+          '--user-data-dir=C:\\Users\\Win11\\AppData\\Local\\Google\\Chrome\\User Data',
         ],
       });
       const ctx = await browser.newContext();
       const page = await ctx.newPage();
+      console.log('[Chrome] New Chrome launched successfully');
       return { browser, context: ctx, page };
     } catch (launchErr) {
       console.error('[Chrome] Launch failed:', launchErr.message);
-      throw new Error('无法连接或启动 Chrome。请确保已安装 Google Chrome。');
+      throw new Error('无法启动 Chrome。请确认已安装 Google Chrome。错误: ' + launchErr.message);
     }
   }
 }
