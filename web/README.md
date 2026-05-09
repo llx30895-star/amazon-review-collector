@@ -105,8 +105,10 @@ chrome.exe --remote-debugging-port=18800
 
 ## 常见问题
 
-### Q: 点击"开始采集"后显示错误
-**A:** 检查 Chrome 远程调试端口是否开启（第一步）。确认用 `--remote-debugging-port=18800` 参数重新打开 Chrome。
+### Q: 点击"开始采集"后显示 `ECONNREFUSED 127.0.0.1:18800`
+**A:** **已解决。** 程序现在会自动检测 Chrome 是否在运行，如未运行会自动启动。无需手动打开 Chrome 或加参数。
+
+如果仍然报错，检查 Chrome 是否安装在没有权限的目录（ ProgramData 等），脚本会自动启动自己的 Chrome 实例。
 
 ### Q: 只采集到 100 条，实际有更多
 **A:** 已修复。程序会自动翻页加载全部评论，更新到最新版本即可。
@@ -115,7 +117,7 @@ chrome.exe --remote-debugging-port=18800
 **A:** 确认 bat 窗口还在运行（不要关闭）。链接为临时链接，关闭后需重新生成。
 
 ### Q: cloudflared 下载失败
-**A:** 脚本会自动降级使用 SSH 隧道方案，无需下载任何东西。
+**A:** 脚本会自动降级使用 SSH 隧道方案（ssh 命令系统自带，无需下载）。
 
 ### Q: 想让链接永久有效
 **A:** 注册 localhost.run 账号并绑定 SSH 密钥，可以获得永久域名。或者使用 Cloudflare Tunnel 注册账号获得永久链接。

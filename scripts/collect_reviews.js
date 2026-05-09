@@ -6,12 +6,33 @@
  *   node collect_reviews.js <url|excelPath|multiUrl> [star]
  */
 
-const { chromium } = require('C:/Users/Win11/AppData/Roaming/npm/node_modules/@qingchencloud/openclaw-zh/node_modules/playwright');
+const playwright = require('C:/Users/Win11/AppData/Roaming/npm/node_modules/@qingchencloud/openclaw-zh/node_modules/playwright');
+const chromium = playwright.chromium;
 const path = require('path');
 const fs = require('fs');
 
 const CDP_ENDPOINT = 'http://127.0.0.1:18800';
 const CLIPPINGS_DIR = 'D:\\software\\obsidian\\agent\\Clippings';
+
+async function ensureBrowser() {
+  try {
+    // Try connecting to existing Chrome at 18800
+    const browser = await chromium.connectOverCDP(CDP_ENDPOINT);
+    console.log('[Chrome] Connected to existing Chrome @18800');
+    return browser;
+  } catch {
+    // Launch new Chrome (visible, with debugging port)
+    console.log('[Chrome] No existing Chrome, launching new one...');
+    return await chromium.launch({
+      headless: false,
+      args: [
+        '--remote-debugging-port=18800',
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
+    });
+  }
+}
 
 const STAR_MAP = {
   '1': { label: '1star', param: 'one_star', zh: '1星' },
@@ -322,8 +343,8 @@ async function main() {
 
   console.log(`[i] Total URLs to process: ${urls.length}`);
 
-  console.log('[1] Connecting to Chrome via CDP...');
-  const browser = await chromium.connectOverCDP(CDP_ENDPOINT);
+  console.log('[1] Connecting to Chrome...');
+  const browser = await ensureBrowser();
   const context = browser.contexts()[0] || await browser.newContext();
   const page = context.pages()[0] || await context.newPage();
 

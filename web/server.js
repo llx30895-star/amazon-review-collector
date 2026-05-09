@@ -13,13 +13,49 @@ const url = require('url');
 const path = require('path');
 const fs = require('fs');
 
-// Lazy-load playwright only when needed (avoids crash if Chrome CDP is unreachable at startup)
+// Lazy-load playwright only when needed
 let _chromium = null;
 async function getChromium() {
   if (!_chromium) {
     _chromium = require('C:/Users/Win11/AppData/Roaming/npm/node_modules/@qingchencloud/openclaw-zh/node_modules/playwright').chromium;
   }
   return _chromium;
+}
+
+// Auto-start Chrome if not running, then connect via CDP
+let _browser = null;
+let _context = null;
+let _page = null;
+
+async function ensureBrowser() {
+  const Chromium = await getChromium();
+
+  // Try connecting to existing Chrome at 18800
+  try {
+    const browser = await Chromium.connectOverCDP(CDP_ENDPOINT);
+    const ctx = browser.contexts()[0] || await browser.newContext();
+    const page = ctx.pages()[0] || await ctx.newPage();
+    return { browser, context: ctx, page };
+  } catch {
+    // No Chrome at 18800 — launch our own Chrome (visible, with debugging port)
+    console.log('[Chrome] No existing Chrome @18800, launching new one...');
+    try {
+      const browser = await Chromium.launch({
+        headless: false,
+        args: [
+          '--remote-debugging-port=18800',
+          '--no-first-run',
+          '--no-default-browser-check',
+        ],
+      });
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      return { browser, context: ctx, page };
+    } catch (launchErr) {
+      console.error('[Chrome] Launch failed:', launchErr.message);
+      throw new Error('无法连接或启动 Chrome。请确保已安装 Google Chrome。');
+    }
+  }
 }
 
 const CDP_ENDPOINT = 'http://127.0.0.1:18800';
@@ -345,10 +381,8 @@ const server = http.createServer(async (req, res) => {
         const starInfo = STAR_MAP[star] || STAR_MAP['1'];
         const results = [];
 
-        const Chromium = await getChromium();
-        const browser = await Chromium.connectOverCDP(CDP_ENDPOINT);
-        const context = browser.contexts()[0] || await browser.newContext();
-        const page = context.pages()[0] || await context.newPage();
+        const { browser, context, page } = await ensureBrowser();
+        _browser = browser;
 
         for (const inputUrl of urls) {
           const asin = extractASIN(inputUrl);
@@ -364,7 +398,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        await browser.close();
+        // Do NOT close browser — keep it open for reuse
 
         // Always return JSON so the page stays (never replace the page with file download)
         return sendJson(res, 200, { results });
