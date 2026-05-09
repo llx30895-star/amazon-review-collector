@@ -96,10 +96,45 @@ async function getTargetReviewCount(page) {
   return null;
 }
 
-async function loadAllReviews(page, maxRounds = 50) {
+async function getCurrentPageNumber(page) {
+  try {
+    const active = page.locator('[data-hook="reviews-footer"] a.a-selected');
+    if (await active.isVisible({ timeout: 2000 })) {
+      const text = await active.textContent();
+      const n = parseInt(text.trim(), 10);
+      if (!isNaN(n)) return n;
+    }
+    // Try URL
+    const url = page.url();
+    const m = url.match(/[?&]pageNumber=(\d+)/);
+    if (m) return parseInt(m[1], 10);
+  } catch {}
+  return 1;
+}
+
+async function getNextPageButton(page) {
+  const selectors = [
+    'a[data-hook="pagination-next-button"]',
+    '[data-hook="pagination-next"] a',
+    'a:has-text("Next page")',
+    'a:has-text("下一页")',
+    'a:has-text("next")',
+  ];
+  for (const sel of selectors) {
+    try {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible({ timeout: 2000 })) return btn;
+    } catch {}
+  }
+  return null;
+}
+
+async function loadAllReviews(page, maxRounds = 80) {
   const targetCount = await getTargetReviewCount(page);
+  let totalLoaded = 0;
   let noChangeCount = 0;
   let prevCount = 0;
+  let currentPage = 1;
 
   for (let round = 0; round < maxRounds; round++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -107,10 +142,24 @@ async function loadAllReviews(page, maxRounds = 50) {
 
     const currentCount = await page.locator('[data-hook="review"]').count();
 
+    // Try Show more first
+    const clickedShowMore = await clickShowMore(page);
+    if (clickedShowMore) {
+      console.log(`[load] Round ${round}: clicked Show more, waiting 3s...`);
+      await sleep(3000);
+      noChangeCount = 0;
+      const newCount = await page.locator('[data-hook="review"]').count();
+      if (newCount > currentCount) continue; // new reviews loaded, keep going
+      // Show more clicked but no new reviews
+    }
+
+    // Check if we reached target
     if (targetCount !== null && currentCount >= targetCount) {
+      console.log(`[load] Reached target: ${currentCount}/${targetCount}`);
       break;
     }
 
+    // Count check
     if (currentCount === prevCount) {
       noChangeCount++;
     } else {
@@ -118,21 +167,36 @@ async function loadAllReviews(page, maxRounds = 50) {
     }
     prevCount = currentCount;
 
-    if (noChangeCount >= 4) break;
+    // Stuck for 2 rounds with no button → try pagination
+    if (noChangeCount >= 2) {
+      const pageNum = await getCurrentPageNumber(page);
+      const nextBtn = await getNextPageButton(page);
 
-    const clicked = await clickShowMore(page);
-    if (clicked) {
-      await sleep(3000);
-      noChangeCount = 0;
-    } else {
-      noChangeCount++;
-      if (noChangeCount >= 2) break;
+      if (nextBtn) {
+        console.log(`[load] Stuck at ${currentCount}, trying next page (current: ${pageNum})...`);
+        await nextBtn.click({ force: true });
+        await sleep(3000);
+        noChangeCount = 0;
+        currentPage++;
+        continue;
+      } else {
+        console.log(`[load] No more pages/buttons. Stuck at ${currentCount}`);
+        break;
+      }
+    }
+
+    // Still nothing after 4 rounds → stop
+    if (noChangeCount >= 4) {
+      console.log(`[load] No change for 4 rounds, stopping at ${currentCount}`);
+      break;
     }
   }
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await sleep(1000);
-  return await page.locator('[data-hook="review"]').count();
+  const finalCount = await page.locator('[data-hook="review"]').count();
+  console.log(`[load] Done. Final: ${finalCount} reviews`);
+  return finalCount;
 }
 
 async function extractReviews(page) {

@@ -88,30 +88,68 @@ async function getTargetReviewCount(page) {
   return null;
 }
 
-async function loadAllReviews(page, maxRounds = 50) {
-  // 第一步：获取目标总数
+async function getCurrentPageNumber(page) {
+  try {
+    const active = page.locator('[data-hook="reviews-footer"] a.a-selected');
+    if (await active.isVisible({ timeout: 2000 })) {
+      const text = await active.textContent();
+      const n = parseInt(text.trim(), 10);
+      if (!isNaN(n)) return n;
+    }
+    const m = page.url().match(/[?&]pageNumber=(\d+)/);
+    if (m) return parseInt(m[1], 10);
+  } catch {}
+  return 1;
+}
+
+async function getNextPageButton(page) {
+  const selectors = [
+    'a[data-hook="pagination-next-button"]',
+    '[data-hook="pagination-next"] a',
+    'a:has-text("Next page")',
+    'a:has-text("下一页")',
+    'a:has-text("next")',
+  ];
+  for (const sel of selectors) {
+    try {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible({ timeout: 2000 })) return btn;
+    } catch {}
+  }
+  return null;
+}
+
+async function loadAllReviews(page, maxRounds = 80) {
   const targetCount = await getTargetReviewCount(page);
   console.log(`[i] 目标评论总数: ${targetCount !== null ? targetCount + ' 条' : '未知（将持续加载直到无变化）'}`);
 
   let noChangeCount = 0;
   let prevCount = 0;
-  let clickAttempts = 0;
 
   for (let round = 0; round < maxRounds; round++) {
-    // 滚动到底部
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await sleep(1500);
 
     const currentCount = await page.locator('[data-hook="review"]').count();
-    console.log(`[4.${round}] 已加载: ${currentCount}${targetCount ? ` / ${targetCount}` : ''}`);
+    console.log(`[4.${round}] 已加载: ${currentCount}${targetCount !== null ? ` / ${targetCount}` : ''}`);
 
-    // 如果有目标数，且已达目标，提前结束
+    // 优先尝试 Show more
+    const clickedShowMore = await clickShowMore(page);
+    if (clickedShowMore) {
+      console.log(`[4.${round}] 已点击 Show more，等待 3s...`);
+      await sleep(3000);
+      noChangeCount = 0;
+      const newCount = await page.locator('[data-hook="review"]').count();
+      if (newCount > currentCount) continue;
+    }
+
+    // 已达目标
     if (targetCount !== null && currentCount >= targetCount) {
-      console.log(`[✓] 已达到目标数量 ${targetCount}，停止加载`);
+      console.log(`[✓] 已达到目标 ${targetCount}，停止`);
       break;
     }
 
-    // 计数无变化次数
+    // 无变化计数
     if (currentCount === prevCount) {
       noChangeCount++;
     } else {
@@ -119,44 +157,30 @@ async function loadAllReviews(page, maxRounds = 50) {
     }
     prevCount = currentCount;
 
-    // 无变化超过 4 次，且明确有目标数且未达标的，可以退出
-    if (noChangeCount >= 4 && targetCount !== null && currentCount < targetCount) {
-      console.log(`[WARN] 已加载 ${currentCount}，目标 ${targetCount}，剩余 ${targetCount - currentCount} 条无法继续加载`);
-      break;
-    }
-
-    // 尝试点击 Show more
-    const clicked = await clickShowMore(page);
-    if (clicked) {
-      clickAttempts++;
-      console.log(`[4.${round}] 已点击 Show more (#${clickAttempts})，等待 3s...`);
-      await sleep(3000);
-      noChangeCount = 0; // 点击后重置无变化计数
-    } else {
-      // 按钮不存在
-      if (targetCount !== null && currentCount < targetCount) {
-        console.log(`[WARN] Show more 按钮消失但未达目标(${currentCount}/${targetCount})，等待 2s 后重试...`);
-        await sleep(2000);
-        const retryClicked = await clickShowMore(page);
-        if (!retryClicked) {
-          noChangeCount++;
-          if (noChangeCount >= 2) {
-            console.log(`[WARN] Show more 按钮确实不存在，已加载 ${currentCount}/${targetCount}，停止`);
-            break;
-          }
-        }
+    // 卡住 2 次 → 尝试翻页
+    if (noChangeCount >= 2) {
+      const pageNum = await getCurrentPageNumber(page);
+      const nextBtn = await getNextPageButton(page);
+      if (nextBtn) {
+        console.log(`[4.${round}] Show more 卡住，尝试翻到下一页 (当前第 ${pageNum} 页)...`);
+        await nextBtn.click({ force: true });
+        await sleep(3000);
+        noChangeCount = 0;
+        continue;
       } else {
-        // 没有更多按钮了
-        console.log(`[INFO] Show more 按钮不存在，停止`);
+        console.log(`[4.${round}] 无法继续加载，停止`);
         break;
       }
     }
+
+    if (noChangeCount >= 4) {
+      console.log(`[WARN] 已加载 ${currentCount}，无法继续`);
+      break;
+    }
   }
 
-  // 最终滚动到最底部确保完整
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await sleep(1000);
-
   return await page.locator('[data-hook="review"]').count();
 }
 
